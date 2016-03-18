@@ -1,3 +1,3 @@
 FROM debian:latest
-RUN apt-get update && apt-get install --assume-yes --no-install-recommends automake gdb libtool libssh-dev tcl-dev
+RUN apt-get update && apt-get install --assume-yes --no-install-recommends critcl libssh-dev
 WORKDIR /usr/src/app

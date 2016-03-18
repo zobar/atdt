@@ -1,9 +1,0 @@
-#
-# Tcl package index file
-#
-
-puts pkgIndex.tcl
-
-package ifneeded ssh @PACKAGE_VERSION@ {
-  load [file join @exec_prefix@ lib @PACKAGE@ ssh[info sharedlibextension]]
-}
