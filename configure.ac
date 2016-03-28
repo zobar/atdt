@@ -1,6 +1,7 @@
 AC_INIT([atdt], [0.0])
 AC_CONFIG_MACRO_DIR([m4])
 AC_DEFINE(USE_TCL_STUBS, 1, [Use Tcl stubs])
+AC_DEFINE(USE_TCLOO_STUBS, 1, [Use TclOO stubs])
 
 AM_INIT_AUTOMAKE([-Wall -Werror subdir-objects])
 AM_PROG_AR

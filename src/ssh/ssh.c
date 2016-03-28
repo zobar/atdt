@@ -1,100 +1,79 @@
-#include <config.h>
-#include <libssh/server.h>
+#include "bind.h"
+#include "session.h"
+#include "ssh.h"
+
 #include <stdbool.h>
 #include <stdio.h>
-#include <tclOO.h>
 
-static int Eval(Tcl_Interp* interp, int argc, const char* argv[], int flags) {
-    int i = 0;
-    Tcl_Obj** objv = ckalloc(argc * sizeof(Tcl_Obj*));
-    int result = TCL_ERROR;
+static Tcl_Object GetObjectFromName(Tcl_Interp* interp, const char* name) {
+    Tcl_Obj* nameObj = Tcl_NewStringObj(name, -1);
+    Tcl_Object result = NULL;
 
-    for (i = 0; i < argc; ++i) {
-        objv[i] = Tcl_NewStringObj(argv[i], -1);
-        Tcl_IncrRefCount(objv[i]);
-    }
+    Tcl_IncrRefCount(nameObj);
+    result = Tcl_GetObjectFromObj(interp, nameObj);
+    Tcl_DecrRefCount(nameObj);
 
-    result = Tcl_EvalObjv(interp, argc, objv, flags);
-
-    for (i = 0; i < argc; ++i)
-        Tcl_DecrRefCount(objv[i]);
-    ckfree(objv);
     return result;
 }
 
-static Tcl_Class NewClass(Tcl_Interp* interp, const char* name) {
-    const char* argv[] = {"::oo::class", "create", name};
+static Tcl_Class GetClassFromName(Tcl_Interp* interp, const char* name) {
+    Tcl_Object classObject = GetObjectFromName(interp, name);
     Tcl_Class result = NULL;
 
-    if (Eval(interp, 3, argv, TCL_EVAL_GLOBAL) == TCL_OK) {
-        Tcl_Object classObject =
-                Tcl_GetObjectFromObj(interp, Tcl_GetObjResult(interp));
-        if (classObject != NULL)
-            result = Tcl_GetObjectAsClass(classObject);
-    }
+    if (classObject != NULL)
+        result = Tcl_GetObjectAsClass(classObject);
 
     return result;
 }
-
-static int DefineClass(Tcl_Interp* interp, const char* name,
-                       const Tcl_MethodType* constructor) {
-    Tcl_Class class = NewClass(interp, name);
-    int result = TCL_ERROR;
-
-    if (class != NULL) {
-        Tcl_ClassSetConstructor(interp, class,
-                Tcl_NewMethod(interp, class, NULL, true, constructor, NULL));
-        result = TCL_OK;
-    }
-
-    return result;
-}
-
-static int CloneSshBindMetadata(Tcl_Interp* interp, ClientData srcMetadata,
-                                ClientData* dstMetadataPtr) {
-    return TCL_ERROR;
-}
-
-static void DeleteSshBindMetadata(ClientData metadata) {
-    ssh_bind_free(metadata);
-}
-
-static const Tcl_ObjectMetadataType SshBindMetadata = {
-    .version    = TCL_OO_METADATA_VERSION_CURRENT,
-    .name       = "ssh_bind",
-    .deleteProc = DeleteSshBindMetadata,
-    .cloneProc  = CloneSshBindMetadata
-};
-
-static int CallSshBindConstructor(ClientData clientData, Tcl_Interp* interp,
-                                  Tcl_ObjectContext objectContext, int objc,
-                                  Tcl_Obj* const* objv) {
-    int result = TCL_ERROR;
-    Tcl_Object self = Tcl_ObjectContextObject(objectContext);
-
-    if (self != NULL) {
-        Tcl_ObjectSetMetadata(self, &SshBindMetadata, ssh_bind_new());
-        result = TCL_OK;
-    }
-
-    return result;
-}
-
-static const Tcl_MethodType SshBindConstructor = {
-    .version    = TCL_OO_METHOD_VERSION_CURRENT,
-    .name       = "Constructor",
-    .callProc   = CallSshBindConstructor,
-    .deleteProc = NULL,
-    .cloneProc  = NULL
-};
 
 int Ssh_Init(Tcl_Interp* interp) {
     int result = TCL_ERROR;
 
-    if (Tcl_InitStubs(interp, TCL_VERSION, false)
-            && Tcl_OOInitStubs(interp)
-            && Tcl_PkgProvide(interp, "ssh", PACKAGE_VERSION) == TCL_OK) {
-        result = DefineClass(interp, "::ssh::bind", &SshBindConstructor);
+    if (Tcl_InitStubs(interp, TCL_VERSION, false) && Tcl_OOInitStubs(interp)) {
+        if (SshBindInit(interp) && SshSessionInit(interp))
+            result = Tcl_PkgProvide(interp, "ssh", PACKAGE_VERSION);
+    }
+
+    return result;
+}
+
+Tcl_Object SshNewInstance(Tcl_Interp* interp, const char* className,
+                       const char* name) {
+    Tcl_Class class = GetClassFromName(interp, className);
+    Tcl_Object result = NULL;
+
+    if (class != NULL)
+        result = Tcl_NewObjectInstance(interp, class, name, NULL, 0, NULL, 0);
+
+    return result;
+}
+
+Tcl_Class SshNewClass(Tcl_Interp* interp, const char* name,
+                      const Tcl_MethodType* constructor,
+                      const Tcl_MethodType* methods[]) {
+    Tcl_Object classObject = SshNewInstance(interp, "::oo::class", name);
+    Tcl_Class result = NULL;
+
+    if (classObject != NULL) {
+        result = Tcl_GetObjectAsClass(classObject);
+        if (result != NULL) {
+            Tcl_ClassSetConstructor(interp, result,
+                                    Tcl_NewMethod(interp, result, NULL, true,
+                                                  constructor, NULL));
+
+            if (methods != NULL) {
+                int i = 0;
+
+                for (i = 0; methods[i] != NULL; ++i) {
+                    const Tcl_MethodType* method = methods[i];
+                    Tcl_Obj* nameObj = Tcl_NewStringObj(methods[i]->name, -1);
+
+                    Tcl_IncrRefCount(nameObj);
+                    Tcl_NewMethod(interp, result, nameObj, true, method, NULL);
+                    Tcl_DecrRefCount(nameObj);
+                }
+            }
+        }
     }
 
     return result;
