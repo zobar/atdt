@@ -1,27 +1,6 @@
 #include "bind.h"
 #include "metadata.h"
 
-/*
-static void AcceptSsh(ClientData clientData, Tcl_Channel channel,
-                      char* hostname, int port) {
-    SshBind* bind = (SshBind*) clientData;
-    Tcl_Interp* interp = bind->interp;
-    intptr_t in = 0;
-    intptr_t out = 0;
-
-    if (Tcl_GetChannelHandle(channel, TCL_READABLE, (void*) &in) == TCL_OK
-            && Tcl_GetChannelHandle(channel, TCL_WRITABLE, (void*) &out) == TCL_OK
-            && in == out) {
-        Tcl_Object session = SshSessionNew(interp);
-
-        printf("Got channel, read=%i write=%i\n", (int) in, (int) out);
-        ssh_bind_accept_fd(bind->bind, SshSessionGetSession(session), in);
-    }
-    else
-        Tcl_Close(interp, channel);
-}
-*/
-
 static int Accept(unused ClientData clientData, Tcl_Interp* interp,
                   Tcl_ObjectContext objectContext, int objc,
                   Tcl_Obj* const* objv) {
@@ -72,18 +51,38 @@ static int Accept(unused ClientData clientData, Tcl_Interp* interp,
 static int Constructor(unused ClientData clientData, Tcl_Interp* interp,
                        Tcl_ObjectContext objectContext, int objc,
                        Tcl_Obj* const* objv) {
-    int result = TCL_ERROR;
-    int skip = Tcl_ObjectContextSkippedArgs(objectContext);
+    const char* rsaKey = NULL;
+    int skip = Tcl_ObjectContextSkippedArgs(objectContext) - 1;
+    int argc = objc - skip;
+    const Tcl_ArgvInfo argTable[] = {
+        TCL_ARGV_AUTO_HELP,
+        {
+            .type    = TCL_ARGV_STRING,
+            .keyStr  = "-rsaKey",
+            .dstPtr  = &rsaKey,
+            .helpStr = "Set the path to the ssh host rsa key, SSHv2 only."
+        },
+        TCL_ARGV_TABLE_END
+    };
+    int result = Tcl_ParseArgsObjv(interp, argTable, &argc, objv + skip, NULL);
 
-    if (objc == skip) {
+    if (result == TCL_OK) {
         ssh_bind bind = ssh_bind_new();
         Tcl_Object self = Tcl_ObjectContextObject(objectContext);
+        int status = SSH_OK;
 
         SshSetBind(self, bind);
-        result = TCL_OK;
+
+        if (rsaKey != NULL) {
+            status = ssh_bind_options_set(bind, SSH_BIND_OPTIONS_RSAKEY,
+                                          rsaKey);
+            if (status != SSH_OK) {
+                Tcl_SetObjResult(interp,
+                                 Tcl_NewStringObj(ssh_get_error(bind), -1));
+                result = TCL_ERROR;
+            }
+        }
     }
-    else
-        Tcl_WrongNumArgs(interp, skip, objv, NULL);
 
     return result;
 }

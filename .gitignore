@@ -27,3 +27,4 @@
 /src/*/*.la
 /src/*/*.lo
 /stamp-h1
+/tmp
