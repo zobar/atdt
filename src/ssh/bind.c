@@ -9,34 +9,43 @@ static int Accept(unused ClientData clientData, Tcl_Interp* interp,
     int skip = Tcl_ObjectContextSkippedArgs(objectContext);
 
     if (objc == skip + 2) {
-        ssh_session session = SshGetSessionObj(interp, objv[skip]);
-        if (session) {
-            Tcl_Channel channel =
-                    Tcl_GetChannel(interp, Tcl_GetString(objv[skip + 1]), NULL);
+        Tcl_Object sessionObject = Tcl_GetObjectFromObj(interp, objv[skip]);
 
-            if (channel != NULL) {
-                intptr_t in = 0;
-                intptr_t out = 0;
+        if (sessionObject != NULL) {
+            ssh_session session = SshGetSession(interp, sessionObject);
 
-                if (Tcl_GetChannelHandle(channel, TCL_READABLE,
-                                         (void*) &in) == TCL_OK
+            if (session) {
+                Tcl_Channel channel =
+                        Tcl_GetChannel(interp, Tcl_GetString(objv[skip + 1]),
+                                       NULL);
+
+                if (channel != NULL) {
+                    intptr_t in = 0;
+                    intptr_t out = 0;
+
+                    if (Tcl_GetChannelHandle(channel, TCL_READABLE,
+                                             (void*) &in) == TCL_OK
                         && Tcl_GetChannelHandle(channel, TCL_WRITABLE,
                                                 (void*) &out) == TCL_OK
                         && in == out) {
-                    int status = ssh_bind_accept_fd(bind, session, in);
+                        int status = ssh_bind_accept_fd(bind, session, in);
 
-                    if (status == SSH_OK)
-                        result = TCL_OK;
+                        if (status == SSH_OK) {
+                            SshSetChannel(sessionObject, channel);
+                            Tcl_UnregisterChannel(interp, channel);
+                            result = TCL_OK;
+                        }
+                        else {
+                            Tcl_SetObjResult(
+                                    interp,
+                                    Tcl_NewStringObj(ssh_get_error(bind), -1));
+                        }
+                    }
                     else {
                         Tcl_SetObjResult(interp,
-                                         Tcl_NewStringObj(ssh_get_error(bind),
+                                         Tcl_NewStringObj("channel must be a readable, writable socket",
                                                           -1));
                     }
-                }
-                else {
-                    Tcl_SetObjResult(interp,
-                                     Tcl_NewStringObj("channel must be a readable, writable socket",
-                                                      -1));
                 }
             }
         }
