@@ -82,10 +82,8 @@ static int Configure(unused ClientData clientData, Tcl_Interp* interp,
                         int blocking = -1;
 
                         result = Tcl_GetBooleanFromObj(interp, arg, &blocking);
-                        if (result != TCL_ERROR) {
-                            printf("-blocking %i\n", blocking);
+                        if (result != TCL_ERROR)
                             ssh_bind_set_blocking(bind, blocking);
-                        }
                     }
                     break;
 
@@ -93,7 +91,6 @@ static int Configure(unused ClientData clientData, Tcl_Interp* interp,
                     {
                         char* rsaKey = Tcl_GetString(arg);
 
-                        printf("-rsakey %s\n", rsaKey);
                         if (ssh_bind_options_set(bind, SSH_BIND_OPTIONS_RSAKEY,
                                                  rsaKey) != SSH_OK) {
                             Tcl_SetObjResult(

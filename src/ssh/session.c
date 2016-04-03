@@ -27,10 +27,8 @@ static int Configure(unused ClientData clientData, Tcl_Interp* interp,
                     {
                         int blocking = -1;
                         result = Tcl_GetBooleanFromObj(interp, arg, &blocking);
-                        if (result != TCL_ERROR) {
-                            printf("-blocking %i\n", blocking);
+                        if (result != TCL_ERROR)
                             ssh_set_blocking(session, blocking);
-                        }
                     }
                     break;
 
@@ -59,6 +57,33 @@ static int Constructor(ClientData clientData, Tcl_Interp* interp,
     return Configure(clientData, interp, objectContext, objc, objv);
 }
 
+static int HandleKeyExchange(unused ClientData clientData, Tcl_Interp* interp,
+                             Tcl_ObjectContext objectContext, int objc,
+                             Tcl_Obj* const* objv) {
+    int result = TCL_ERROR;
+    int skip = Tcl_ObjectContextSkippedArgs(objectContext);
+
+    if (skip == objc) {
+        Tcl_Object self = Tcl_ObjectContextObject(objectContext);
+        ssh_session session = SshGetSession(interp, self);
+
+        if (session != NULL) {
+            int status = ssh_handle_key_exchange(session);
+
+            if (status == SSH_OK)
+                result = TCL_OK;
+            else {
+                Tcl_SetObjResult(interp,
+                                 Tcl_NewStringObj(ssh_get_error(session), -1));
+            }
+        }
+    }
+    else
+        Tcl_WrongNumArgs(interp, skip, objv, NULL);
+
+    return result;
+}
+
 bool SshSessionInit(Tcl_Interp* interp) {
     static const Tcl_MethodType constructor = {
         .version  = TCL_OO_METHOD_VERSION_CURRENT,
@@ -70,7 +95,13 @@ bool SshSessionInit(Tcl_Interp* interp) {
         .name     = "configure",
         .callProc = Configure
     };
-    static const Tcl_MethodType* methods[] = {&configure, NULL};
+    static const Tcl_MethodType handleKeyExchange = {
+        .version  = TCL_OO_METHOD_VERSION_CURRENT,
+        .name     = "handleKeyExchange",
+        .callProc = HandleKeyExchange
+    };
+    static const Tcl_MethodType* methods[] =
+            {&configure, &handleKeyExchange, NULL};
 
     return SshNewClass(interp, "::ssh::session", &constructor, methods) != NULL;
 }
