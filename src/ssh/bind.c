@@ -11,9 +11,8 @@ static int Accept(unused ClientData clientData, Tcl_Interp* interp,
     if (objc == skip + 2) {
         ssh_session session = SshGetSessionObj(interp, objv[skip]);
         if (session) {
-            Tcl_Channel channel = Tcl_GetChannel(interp,
-                                                 Tcl_GetString(objv[skip + 1]),
-                                                 NULL);
+            Tcl_Channel channel =
+                    Tcl_GetChannel(interp, Tcl_GetString(objv[skip + 1]), NULL);
 
             if (channel != NULL) {
                 intptr_t in = 0;
@@ -48,43 +47,73 @@ static int Accept(unused ClientData clientData, Tcl_Interp* interp,
     return result;
 }
 
-static int Constructor(unused ClientData clientData, Tcl_Interp* interp,
-                       Tcl_ObjectContext objectContext, int objc,
-                       Tcl_Obj* const* objv) {
-    const char* rsaKey = NULL;
-    int skip = Tcl_ObjectContextSkippedArgs(objectContext) - 1;
-    int argc = objc - skip;
-    const Tcl_ArgvInfo argTable[] = {
-        TCL_ARGV_AUTO_HELP,
-        {
-            .type    = TCL_ARGV_STRING,
-            .keyStr  = "-rsaKey",
-            .dstPtr  = &rsaKey,
-            .helpStr = "Set the path to the ssh host rsa key, SSHv2 only."
-        },
-        TCL_ARGV_TABLE_END
-    };
-    int result = Tcl_ParseArgsObjv(interp, argTable, &argc, objv + skip, NULL);
+static int Configure(unused ClientData clientData, Tcl_Interp* interp,
+                     Tcl_ObjectContext objectContext, int objc,
+                     Tcl_Obj* const* objv) {
+    enum options {BLOCKING, RSA_KEY};
+    static const char* keys[] = {"-blocking", "-rsakey", NULL};
 
-    if (result == TCL_OK) {
-        ssh_bind bind = ssh_bind_new();
-        Tcl_Object self = Tcl_ObjectContextObject(objectContext);
-        int status = SSH_OK;
+    ssh_bind bind = SshGetBind(interp, Tcl_ObjectContextObject(objectContext));
+    int result = TCL_OK;
+    int skip = Tcl_ObjectContextSkippedArgs(objectContext);
+    int i = skip;
 
-        SshSetBind(self, bind);
+    for (i = skip; i < objc && result == TCL_OK; ++i) {
+        int option = 0;
 
-        if (rsaKey != NULL) {
-            status = ssh_bind_options_set(bind, SSH_BIND_OPTIONS_RSAKEY,
-                                          rsaKey);
-            if (status != SSH_OK) {
-                Tcl_SetObjResult(interp,
-                                 Tcl_NewStringObj(ssh_get_error(bind), -1));
+        result = Tcl_GetIndexFromObj(interp, objv[i], keys, "option", 0,
+                                     &option);
+        if (result == TCL_OK) {
+            if (++i < objc) {
+                Tcl_Obj* arg = objv[i];
+
+                switch (option) {
+                case BLOCKING:
+                    {
+                        int blocking = -1;
+
+                        result = Tcl_GetBooleanFromObj(interp, arg, &blocking);
+                        if (result != TCL_ERROR) {
+                            printf("-blocking %i\n", blocking);
+                            ssh_bind_set_blocking(bind, blocking);
+                        }
+                    }
+                    break;
+
+                case RSA_KEY:
+                    {
+                        char* rsaKey = Tcl_GetString(arg);
+
+                        printf("-rsakey %s\n", rsaKey);
+                        if (ssh_bind_options_set(bind, SSH_BIND_OPTIONS_RSAKEY,
+                                                 rsaKey) != SSH_OK) {
+                            Tcl_SetObjResult(
+                                    interp,
+                                    Tcl_NewStringObj(ssh_get_error(bind), -1));
+                            result = TCL_ERROR;
+                        }
+                    }
+                    break;
+                }
+            }
+            else {
                 result = TCL_ERROR;
+                Tcl_SetObjResult(interp,
+                                 Tcl_ObjPrintf("\"%s\" option requires an additional argument",
+                                               keys[option]));
             }
         }
     }
 
     return result;
+}
+
+static int Constructor(ClientData clientData, Tcl_Interp* interp,
+                       Tcl_ObjectContext objectContext, int objc,
+                       Tcl_Obj* const* objv) {
+    SshSetBind(Tcl_ObjectContextObject(objectContext), ssh_bind_new());
+
+    return Configure(clientData, interp, objectContext, objc, objv);
 }
 
 bool SshBindInit(Tcl_Interp* interp) {
@@ -98,7 +127,12 @@ bool SshBindInit(Tcl_Interp* interp) {
         .name     = "accept",
         .callProc = Accept
     };
-    static const Tcl_MethodType* methods[] = {&accept, NULL};
+    static const Tcl_MethodType configure = {
+        .version  = TCL_OO_METHOD_VERSION_CURRENT,
+        .name     = "configure",
+        .callProc = Configure
+    };
+    static const Tcl_MethodType* methods[] = {&accept, &configure, NULL};
 
     return SshNewClass(interp, "::ssh::bind", &constructor, methods) != NULL;
 }
