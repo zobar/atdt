@@ -6,6 +6,8 @@
 
 ssh_bind SshGetBind(Tcl_Interp* interp, Tcl_Object object);
 
+ssh_session SshGetSession(Tcl_Interp* interp, Tcl_Object object);
+
 ssh_session SshGetSessionObj(Tcl_Interp* interp, Tcl_Obj* obj);
 
 void SshSetBind(Tcl_Object object, ssh_bind bind);

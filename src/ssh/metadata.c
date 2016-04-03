@@ -69,6 +69,10 @@ static const Tcl_ObjectMetadataType SessionMetadata = {
     .cloneProc  = CloneSessionMetadata
 };
 
+ssh_session SshGetSession(Tcl_Interp* interp, Tcl_Object object) {
+    return (ssh_session) Get(interp, object, &SessionMetadata);
+}
+
 ssh_session SshGetSessionObj(Tcl_Interp* interp, Tcl_Obj* obj) {
     return (ssh_session) GetObj(interp, obj, &SessionMetadata);
 }

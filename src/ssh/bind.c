@@ -94,6 +94,9 @@ static int Configure(unused ClientData clientData, Tcl_Interp* interp,
                         }
                     }
                     break;
+
+                default:
+                    result = TCL_ERROR;
                 }
             }
             else {
