@@ -15,11 +15,14 @@
 /configure
 /depcomp
 /install-sh
+/lib/
 /libtool
 /ltmain.sh
-/m4/libtool.m4
-/m4/lt*.m4
+/m4/*
+!/m4/gnulib-cache.m4
+!/m4/tcl.m4
 /missing
+/snippet/
 /src/pkgIndex.tcl
 /src/*/.deps/
 /src/*/.dirstamp

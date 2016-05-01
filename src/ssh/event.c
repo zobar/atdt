@@ -1,9 +1,10 @@
 #include "config.h"
 #include "event.h"
 
+#include "nonblocking.h"
+#include <errno.h>
 #include <fcntl.h>
 #include <string.h>
-#include <sys/errno.h>
 #include <unistd.h>
 
 typedef struct EventLoop EventLoop;

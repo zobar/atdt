@@ -6,8 +6,11 @@ AC_DEFINE(USE_TCLOO_STUBS, 1, [Use TclOO stubs])
 
 AM_INIT_AUTOMAKE([-Wall -Werror subdir-objects])
 AM_PROG_AR
+gl_EARLY
 
 LT_INIT([disable-static dlopen])
+
+gl_INIT
 
 TEA_INIT([3.9])
 TEA_PATH_TCLCONFIG
@@ -16,5 +19,6 @@ TEA_PREFIX
 TEA_ENABLE_THREADS
 TEA_PUBLIC_TCL_HEADERS
 
+AC_CONFIG_FILES([Makefile lib/Makefile src/pkgIndex.tcl])
 AC_CONFIG_HEADERS([config.h])
-AC_OUTPUT([Makefile src/pkgIndex.tcl])
+AC_OUTPUT

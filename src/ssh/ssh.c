@@ -6,8 +6,6 @@
 #include "session.h"
 #include "thread.h"
 
-#include <stdio.h>
-
 int Ssh_Init(Tcl_Interp* interp) {
     printf("init package\n");
     int result = TCL_ERROR;
