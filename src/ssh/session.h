@@ -1,8 +1,7 @@
 #pragma once
 
-#include "ssh.h"
-
 #include <stdbool.h>
+#include <tclOO.h>
 
 bool SshSessionInit(Tcl_Interp* interp);
 

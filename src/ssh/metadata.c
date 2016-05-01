@@ -1,4 +1,7 @@
+#include "config.h"
 #include "metadata.h"
+
+#include "ssh.h"
 
 static ClientData Get(Tcl_Interp* interp, Tcl_Object object,
                       const Tcl_ObjectMetadataType* metaTypePtr) {
@@ -22,6 +25,7 @@ static int CloneBindMetadata(Tcl_Interp* interp, unused ClientData srcMetadata,
 }
 
 static void DeleteBindMetadata(ClientData metadata) {
+    printf("Deleting bind %p\n", metadata);
     ssh_bind_free((ssh_bind) metadata);
 }
 
@@ -71,6 +75,7 @@ static int CloneSessionMetadata(Tcl_Interp* interp,
 }
 
 static void DeleteSessionMetadata(ClientData metadata) {
+    printf("Deleting session %p\n", metadata);
     ssh_free((ssh_session) metadata);
 }
 

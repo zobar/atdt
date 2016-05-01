@@ -1,8 +1,0 @@
-version: '2'
-services:
-  atdt:
-    build: .
-    ports:
-      - "2222:2222"
-    volumes:
-      - .:/usr/src/app

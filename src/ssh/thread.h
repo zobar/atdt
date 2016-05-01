@@ -3,4 +3,4 @@
 #include <stdbool.h>
 #include <tcl.h>
 
-bool SshBindInit(Tcl_Interp* interp);
+bool SshThreadInit(Tcl_Interp* interp);

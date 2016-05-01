@@ -1,5 +1,17 @@
+#include "config.h"
 #include "bind.h"
+
 #include "metadata.h"
+#include "oo.h"
+#include "ssh.h"
+
+static int SshStatus(Tcl_Interp* interp, void* self, int status) {
+    if (status == SSH_OK)
+        return TCL_OK;
+
+    Tcl_SetObjResult(interp, Tcl_NewStringObj(ssh_get_error(self), -1));
+    return TCL_ERROR;
+}
 
 static int Accept(unused ClientData clientData, Tcl_Interp* interp,
                   Tcl_ObjectContext objectContext, int objc,
@@ -25,14 +37,13 @@ static int Accept(unused ClientData clientData, Tcl_Interp* interp,
 
                     if (Tcl_GetChannelHandle(channel, TCL_READABLE,
                                              (void*) &in) == TCL_OK
-                        && Tcl_GetChannelHandle(channel, TCL_WRITABLE,
-                                                (void*) &out) == TCL_OK
-                        && in == out) {
+                            && Tcl_GetChannelHandle(channel, TCL_WRITABLE,
+                                                    (void*) &out) == TCL_OK
+                            && in == out) {
                         int status = ssh_bind_accept_fd(bind, session, in);
 
                         if (status == SSH_OK) {
                             SshSetChannel(sessionObject, channel);
-                            Tcl_UnregisterChannel(interp, channel);
                             result = TCL_OK;
                         }
                         else {
@@ -56,11 +67,42 @@ static int Accept(unused ClientData clientData, Tcl_Interp* interp,
     return result;
 }
 
+static int SetBlocking(Tcl_Interp* interp, ssh_bind bind, Tcl_Obj* arg) {
+    int blocking = -1;
+    int result = Tcl_GetBooleanFromObj(interp, arg, &blocking);
+
+    if (result != TCL_ERROR)
+        ssh_bind_set_blocking(bind, blocking);
+
+    return result;
+}
+
+static int SetMyPort(Tcl_Interp* interp, ssh_bind bind, Tcl_Obj* arg) {
+    int port = 0;
+    int result = Tcl_GetIntFromObj(interp, arg, &port);
+
+    if (result != TCL_ERROR) {
+        result = SshStatus(interp, bind,
+                           ssh_bind_options_set(bind, SSH_BIND_OPTIONS_BINDPORT,
+                                                &port));
+    }
+
+    return result;
+}
+
+static int SetRsaKey(Tcl_Interp* interp, ssh_bind bind, Tcl_Obj* arg) {
+    char* rsaKey = Tcl_GetString(arg);
+
+    return SshStatus(interp, bind,
+                     ssh_bind_options_set(bind, SSH_BIND_OPTIONS_RSAKEY,
+                                          rsaKey));
+}
+
 static int Configure(unused ClientData clientData, Tcl_Interp* interp,
                      Tcl_ObjectContext objectContext, int objc,
                      Tcl_Obj* const* objv) {
-    enum options {BLOCKING, RSA_KEY};
-    static const char* keys[] = {"-blocking", "-rsakey", NULL};
+    enum options {BLOCKING, MY_PORT, RSA_KEY};
+    static const char* keys[] = {"-blocking", "-myport", "-rsakey", NULL};
 
     ssh_bind bind = SshGetBind(interp, Tcl_ObjectContextObject(objectContext));
     int result = TCL_OK;
@@ -78,27 +120,15 @@ static int Configure(unused ClientData clientData, Tcl_Interp* interp,
 
                 switch (option) {
                 case BLOCKING:
-                    {
-                        int blocking = -1;
+                    result = SetBlocking(interp, bind, arg);
+                    break;
 
-                        result = Tcl_GetBooleanFromObj(interp, arg, &blocking);
-                        if (result != TCL_ERROR)
-                            ssh_bind_set_blocking(bind, blocking);
-                    }
+                case MY_PORT:
+                    result = SetMyPort(interp, bind, arg);
                     break;
 
                 case RSA_KEY:
-                    {
-                        char* rsaKey = Tcl_GetString(arg);
-
-                        if (ssh_bind_options_set(bind, SSH_BIND_OPTIONS_RSAKEY,
-                                                 rsaKey) != SSH_OK) {
-                            Tcl_SetObjResult(
-                                    interp,
-                                    Tcl_NewStringObj(ssh_get_error(bind), -1));
-                            result = TCL_ERROR;
-                        }
-                    }
+                    result = SetRsaKey(interp, bind, arg);
                     break;
 
                 default:
@@ -120,9 +150,19 @@ static int Configure(unused ClientData clientData, Tcl_Interp* interp,
 static int Constructor(ClientData clientData, Tcl_Interp* interp,
                        Tcl_ObjectContext objectContext, int objc,
                        Tcl_Obj* const* objv) {
-    SshSetBind(Tcl_ObjectContextObject(objectContext), ssh_bind_new());
+    ssh_bind bind = ssh_bind_new();
+    int result = TCL_OK;
 
-    return Configure(clientData, interp, objectContext, objc, objv);
+    SshSetBind(Tcl_ObjectContextObject(objectContext), bind);
+    result = Configure(clientData, interp, objectContext, objc, objv);
+    if (result == TCL_OK) {
+        result = SshStatus(interp, bind, ssh_bind_listen(bind));
+        if (result == TCL_OK) {
+
+        }
+    }
+
+    return result;
 }
 
 bool SshBindInit(Tcl_Interp* interp) {

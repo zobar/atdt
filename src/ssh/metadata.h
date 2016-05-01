@@ -1,8 +1,7 @@
 #pragma once
 
-#include "ssh.h"
-
 #include <libssh/server.h>
+#include <tclOO.h>
 
 ssh_bind SshGetBind(Tcl_Interp* interp, Tcl_Object object);
 
