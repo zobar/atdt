@@ -27,7 +27,7 @@
 
 
 # Specification in the form of a command-line invocation:
-#   gnulib-tool --import --dir=. --lib=libgnu --source-base=lib --m4-base=m4 --doc-base=doc --tests-base=tests --aux-dir=. --no-conditional-dependencies --libtool --macro-prefix=gl errno fcntl-h nonblocking pipe2 stdbool strerror
+#   gnulib-tool --import --dir=. --lib=libgnu --source-base=lib --m4-base=m4 --doc-base=doc --tests-base=tests --aux-dir=. --no-conditional-dependencies --libtool --macro-prefix=gl errno fcntl-h nonblocking pipe2 poll-h stdbool
 
 # Specification in the form of a few gnulib-tool.m4 macro invocations:
 gl_LOCAL_DIR([])
@@ -36,8 +36,8 @@ gl_MODULES([
   fcntl-h
   nonblocking
   pipe2
+  poll-h
   stdbool
-  strerror
 ])
 gl_AVOID([])
 gl_SOURCE_BASE([lib])
