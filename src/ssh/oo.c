@@ -37,6 +37,7 @@ Tcl_Object SshNewInstance(Tcl_Interp* interp, const char* className,
 
 Tcl_Class SshNewClass(Tcl_Interp* interp, const char* name,
                       const Tcl_MethodType* constructor,
+                      const Tcl_MethodType* destructor,
                       const Tcl_MethodType* methods[]) {
     Tcl_Object classObject = SshNewInstance(interp, "::oo::class", name);
     Tcl_Class result = NULL;
@@ -47,6 +48,12 @@ Tcl_Class SshNewClass(Tcl_Interp* interp, const char* name,
             Tcl_ClassSetConstructor(interp, result,
                                     Tcl_NewMethod(interp, result, NULL, true,
                                                   constructor, NULL));
+
+            if (destructor != NULL) {
+                Tcl_ClassSetDestructor(interp, result,
+                                       Tcl_NewMethod(interp, result, NULL, true,
+                                                     destructor, NULL));
+            }
 
             if (methods != NULL) {
                 int i = 0;
