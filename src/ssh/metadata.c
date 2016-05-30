@@ -1,18 +1,16 @@
-#include "config.h"
-#include "metadata.h"
+#include "sshInt.h"
 
-#include "ssh.h"
-
-static int CloneBindMetadata(Tcl_Interp* interp, unused ClientData srcMetadata,
-                             unused ClientData* dstMetadataPtr) {
+static int CloneBindMetadata(
+        Tcl_Interp* interp, unused ClientData srcMetadata,
+        unused ClientData* dstMetadataPtr) {
     Tcl_SetObjResult(interp, Tcl_NewStringObj("bind is not clonable", -1));
 
     return TCL_ERROR;
 }
 
-static int CloneConnectMetadata(unused Tcl_Interp* interp,
-                                ClientData srcMetadata,
-                                ClientData* dstMetadataPtr) {
+static int CloneConnectMetadata(
+        unused Tcl_Interp* interp, ClientData srcMetadata,
+        ClientData* dstMetadataPtr) {
     Tcl_IncrRefCount((Tcl_Obj*) srcMetadata);
     *dstMetadataPtr = srcMetadata;
 
@@ -20,24 +18,23 @@ static int CloneConnectMetadata(unused Tcl_Interp* interp,
 }
 
 static int CloneInterpMetadata(unused Tcl_Interp* interp,
-                               ClientData srcMetadata,
-                               ClientData* dstMetadataPtr) {
+        ClientData srcMetadata, ClientData* dstMetadataPtr) {
     *dstMetadataPtr = srcMetadata;
 
     return TCL_OK;
 }
 
-static int CloneSessionMetadata(Tcl_Interp* interp,
-                                unused ClientData srcMetadata,
-                                unused ClientData* dstMetadataPtr) {
+static int CloneSessionMetadata(
+        Tcl_Interp* interp, unused ClientData srcMetadata,
+        unused ClientData* dstMetadataPtr) {
     Tcl_SetObjResult(interp, Tcl_NewStringObj("session is not clonable", -1));
 
     return TCL_ERROR;
 }
 
-static int CloneThreadIdMetadata(unused Tcl_Interp* interp,
-                                 ClientData srcMetadata,
-                                 ClientData* dstMetadataPtr) {
+static int CloneThreadIdMetadata(
+        unused Tcl_Interp* interp, ClientData srcMetadata,
+        ClientData* dstMetadataPtr) {
     *dstMetadataPtr = srcMetadata;
 
     return TCL_OK;
@@ -96,16 +93,18 @@ static const Tcl_ObjectMetadataType ThreadIdMetadata = {
     .version    = TCL_OO_METADATA_VERSION_CURRENT
 };
 
-static ClientData Get(Tcl_Interp* interp, Tcl_Object object,
-                      const Tcl_ObjectMetadataType* metaTypePtr) {
+static ClientData Get(
+        Tcl_Interp* interp, Tcl_Object object,
+        const Tcl_ObjectMetadataType* metaTypePtr) {
     ClientData result = Tcl_ObjectGetMetadata(object, metaTypePtr);
 
     if (result == NULL && interp != NULL) {
-        Tcl_SetObjResult(interp,
-                         Tcl_ObjPrintf("%s does not have '%s' set",
-                                       Tcl_GetString(Tcl_GetObjectName(interp,
-                                                                       object)),
-                                       metaTypePtr->name));
+        Tcl_Obj* message = Tcl_ObjPrintf(
+                "%s does not have '%s' set",
+                Tcl_GetString(Tcl_GetObjectName(interp, object)),
+                metaTypePtr->name);
+
+        Tcl_SetObjResult(interp, message);
     }
 
     return result;

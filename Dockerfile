@@ -12,7 +12,7 @@ RUN cmake -D CMAKE_BUILD_TYPE=Debug -D CMAKE_INSTALL_PREFIX=/usr -D LIB_INSTALL_
  make &&\
  make install
 WORKDIR /tmp/build/tcl8.6.5
-RUN /usr/src/tcl8.6.5/unix/configure --enable-64bit --enable-symbols --libdir=/usr/lib/x86_64-linux-gnu --prefix=/usr &&\
+RUN CFLAGS=-DTCL_MEM_DEBUG /usr/src/tcl8.6.5/unix/configure --enable-64bit --enable-symbols --libdir=/usr/lib/x86_64-linux-gnu --prefix=/usr &&\
  make &&\
  make install
 WORKDIR /tmp/build/tcllib-1.18

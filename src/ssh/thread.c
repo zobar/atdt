@@ -1,32 +1,37 @@
-#include "config.h"
-#include "thread.h"
-
-#include "ssh.h"
+#include "sshInt.h"
 
 #include <libssh/callbacks.h>
 
 static int MutexDestroy(void** lock) {
     Tcl_Mutex* mutex = *lock;
+
     Tcl_MutexFinalize(mutex);
+
     return 0;
 }
 
 static int MutexInit(void** lock) {
     Tcl_Mutex* mutex = ckalloc(sizeof(Tcl_Mutex));
+
     *mutex = NULL;
     *lock = mutex;
+
     return 0;
 }
 
 static int MutexLock(void** lock) {
     Tcl_Mutex* mutex = *lock;
+
     Tcl_MutexLock(mutex);
+
     return 0;
 }
 
 static int MutexUnlock(void** lock) {
     Tcl_Mutex* mutex = *lock;
+
     Tcl_MutexUnlock(mutex);
+
     return 0;
 }
 

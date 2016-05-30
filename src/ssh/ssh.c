@@ -1,10 +1,4 @@
-#include "config.h"
-#include "ssh.h"
-
-#include "bind.h"
-#include "event.h"
-#include "session.h"
-#include "thread.h"
+#include "sshInt.h"
 
 int Ssh_Init(Tcl_Interp* interp) {
     int result = TCL_ERROR;

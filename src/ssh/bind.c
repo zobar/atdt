@@ -1,12 +1,4 @@
-#include "config.h"
-#include "bind.h"
-
-#include "error.h"
-#include "event.h"
-#include "metadata.h"
-#include "oo.h"
-#include "session.h"
-#include "ssh.h"
+#include "sshInt.h"
 
 #include <poll.h>
 
@@ -16,8 +8,8 @@ typedef struct {
     ssh_session session;
 } ConnectEvent;
 
-static int SetConnect(unused Tcl_Interp* interp, Tcl_Object object,
-                      Tcl_Obj* arg) {
+static int SetConnect(
+        unused Tcl_Interp* interp, Tcl_Object object, Tcl_Obj* arg) {
     SshSetConnect(object, arg);
 
     return TCL_OK;
@@ -32,10 +24,10 @@ static int SetPort(Tcl_Interp* interp, Tcl_Object object, Tcl_Obj* arg) {
 
         result = Tcl_GetIntFromObj(interp, arg, &port);
         if (result != TCL_ERROR) {
-            result = SshError(interp, bind,
-                              ssh_bind_options_set(bind,
-                                                   SSH_BIND_OPTIONS_BINDPORT,
-                                                   &port));
+            int status = ssh_bind_options_set(
+                    bind, SSH_BIND_OPTIONS_BINDPORT, &port);
+
+            result = SshLibError(interp, bind, status);
         }
     }
 
@@ -48,18 +40,18 @@ static int SetRsaKey(Tcl_Interp* interp, Tcl_Object object, Tcl_Obj* arg) {
 
     if (bind != NULL) {
         char* rsaKey = Tcl_GetString(arg);
+        int status = ssh_bind_options_set(
+                bind, SSH_BIND_OPTIONS_RSAKEY, rsaKey);
 
-        result = SshError(interp, bind,
-                          ssh_bind_options_set(bind, SSH_BIND_OPTIONS_RSAKEY,
-                                               rsaKey));
+        result = SshLibError(interp, bind, status);
     }
 
     return result;
 }
 
-static int Configure(unused ClientData clientData, Tcl_Interp* interp,
-                     Tcl_ObjectContext objectContext, int objc,
-                     Tcl_Obj* const* objv) {
+static int Configure(
+        unused ClientData clientData, Tcl_Interp* interp,
+        Tcl_ObjectContext objectContext, int objc, Tcl_Obj* const* objv) {
     enum options {CONNECT, PORT, RSA_KEY};
     static const char* keys[] = {"-connect", "-port", "-rsakey", NULL};
 
@@ -71,8 +63,8 @@ static int Configure(unused ClientData clientData, Tcl_Interp* interp,
     for (i = skip; i < objc && result == TCL_OK; ++i) {
         int option = 0;
 
-        result = Tcl_GetIndexFromObj(interp, objv[i], keys, "option", 0,
-                                     &option);
+        result = Tcl_GetIndexFromObj(
+                interp, objv[i], keys, "option", 0, &option);
         if (result == TCL_OK) {
             if (++i < objc) {
                 Tcl_Obj* arg = objv[i];
@@ -95,10 +87,12 @@ static int Configure(unused ClientData clientData, Tcl_Interp* interp,
                 }
             }
             else {
+                Tcl_Obj* message = Tcl_ObjPrintf(
+                        "\"%s\" option requires an additional argument",
+                        keys[option]);
+
+                Tcl_SetObjResult(interp, message);
                 result = TCL_ERROR;
-                Tcl_SetObjResult(interp,
-                                 Tcl_ObjPrintf("\"%s\" option requires an additional argument",
-                                               keys[option]));
             }
         }
     }
@@ -123,9 +117,10 @@ static int ConnectTclCallback(Tcl_Event* evPtr, unused int flags) {
         sessionObject = SshNewSession(interp, event->session);
         callbackWords[1] = Tcl_GetObjectName(interp, sessionObject);
         callback = Tcl_ConcatObj(2, callbackWords);
+
         Tcl_IncrRefCount(callback);
-        result = Tcl_EvalObjEx(interp, callback,
-                               TCL_EVAL_DIRECT | TCL_EVAL_GLOBAL);
+        result = Tcl_EvalObjEx(
+                interp, callback, TCL_EVAL_DIRECT | TCL_EVAL_GLOBAL);
         Tcl_DecrRefCount(callback);
 
         if (result != TCL_OK)
@@ -137,8 +132,8 @@ static int ConnectTclCallback(Tcl_Event* evPtr, unused int flags) {
     return 1;
 }
 
-static int ConnectSshCallback(unused socket_t fd, unused int revents,
-                              ClientData clientData) {
+static int ConnectSshCallback(
+        unused socket_t fd, unused int revents, unused ClientData clientData) {
     Tcl_Object object = clientData;
     ssh_bind bind = SshGetBind(NULL, object);
     Tcl_ThreadId threadId = SshGetThreadId(NULL, object);
@@ -163,11 +158,10 @@ static int ConnectSshCallback(unused socket_t fd, unused int revents,
     return SSH_OK;
 }
 
-static int Constructor(ClientData clientData, Tcl_Interp* interp,
-                       Tcl_ObjectContext objectContext, int objc,
-                       Tcl_Obj* const* objv) {
+static int Constructor(
+        ClientData clientData, Tcl_Interp* interp,
+        Tcl_ObjectContext objectContext, int objc, Tcl_Obj* const* objv) {
     ssh_bind bind = ssh_bind_new();
-    int result = TCL_OK;
     Tcl_Object object = Tcl_ObjectContextObject(objectContext);
 
     ssh_bind_set_blocking(bind, false);
@@ -175,14 +169,13 @@ static int Constructor(ClientData clientData, Tcl_Interp* interp,
     SshSetInterp(object, interp);
     SshSetThreadId(object, Tcl_GetCurrentThread());
 
-    result = Configure(clientData, interp, objectContext, objc, objv);
-
-    return result;
+    return Configure(clientData, interp, objectContext, objc, objv);
 }
 
-static int Destructor(unused ClientData clientData, unused Tcl_Interp* interp,
-                      unused Tcl_ObjectContext objectContext, unused int objc,
-                      unused Tcl_Obj* const* objv) {
+static int Destructor(
+        unused ClientData clientData, unused Tcl_Interp* interp,
+        unused Tcl_ObjectContext objectContext, unused int objc,
+        unused Tcl_Obj* const* objv) {
     Tcl_Object object = Tcl_ObjectContextObject(objectContext);
     ssh_bind bind = SshGetBind(interp, object);
 
@@ -196,9 +189,9 @@ static int Destructor(unused ClientData clientData, unused Tcl_Interp* interp,
     return TCL_OK;
 }
 
-static int Listen(unused ClientData clientData, Tcl_Interp* interp,
-                  Tcl_ObjectContext objectContext, int objc,
-                  Tcl_Obj* const* objv) {
+static int Listen(
+        unused ClientData clientData, Tcl_Interp* interp,
+        Tcl_ObjectContext objectContext, int objc, Tcl_Obj* const* objv) {
     int result = TCL_ERROR;
     int skip = Tcl_ObjectContextSkippedArgs(objectContext);
 
@@ -207,11 +200,11 @@ static int Listen(unused ClientData clientData, Tcl_Interp* interp,
         ssh_bind bind = SshGetBind(interp, object);
 
         if (bind != NULL) {
-            result = SshError(interp, bind, ssh_bind_listen(bind));
+            result = SshLibError(interp, bind, ssh_bind_listen(bind));
             if (result == TCL_OK) {
-                result = SshAddFdEventHandler(interp, ssh_bind_get_fd(bind),
-                                              POLLIN | POLLOUT,
-                                              ConnectSshCallback, object);
+                result = SshAddFdEventHandler(
+                        interp, ssh_bind_get_fd(bind), POLLIN | POLLOUT,
+                        ConnectSshCallback, object);
             }
         }
     }
@@ -243,7 +236,8 @@ bool SshBindInit(Tcl_Interp* interp) {
         .version  = TCL_OO_METHOD_VERSION_CURRENT
     };
     static const Tcl_MethodType* methods[] = {&configure, &listen, NULL};
+    Tcl_Class class = SshNewClass(
+            interp, "::ssh::bind", &constructor, &destructor, methods);
 
-    return SshNewClass(interp, "::ssh::bind", &constructor, &destructor,
-                       methods) != NULL;
+    return (class != NULL);
 }

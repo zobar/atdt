@@ -1,8 +1,4 @@
-#include "config.h"
-#include "event.h"
-
-#include "error.h"
-#include "ssh.h"
+#include "sshInt.h"
 
 #include "nonblocking.h"
 #include <errno.h>
@@ -34,8 +30,8 @@ static int writeFd = -1;
 
 TCL_DECLARE_MUTEX(mutex);
 
-static int Receive(unused socket_t fd, unused int revents,
-                   unused ClientData clientData) {
+static int Receive(
+        unused socket_t fd, unused int revents, unused ClientData clientData) {
     return SSH_OK;
 }
 
@@ -54,8 +50,10 @@ static Tcl_ThreadCreateType Loop(ClientData clientData) {
                 Message message;
 
                 if (read(loop->readFd, &message, sizeof(Message))
-                        == sizeof(Message))
+                        == sizeof(Message)) {
                     message.callback(loop, message.clientData);
+                    ckfree(message.clientData);
+                }
                 else if (errno != EAGAIN)
                     status = SSH_ERROR;
             }
@@ -76,13 +74,14 @@ static int Start(Tcl_Interp* interp) {
     EventLoop* loop = NULL;
 
     if (pipe2(control, O_CLOEXEC | O_NONBLOCK) == 0) {
-        int status = 0;
+        int status = TCL_ERROR;
 
         loop = ckalloc(sizeof(EventLoop));
         loop->event  = ssh_event_new();
         loop->readFd = control[0];
-        status = Tcl_CreateThread(&loop->threadId, Loop, loop,
-                                  TCL_THREAD_STACK_DEFAULT, TCL_THREAD_NOFLAGS);
+        status = Tcl_CreateThread(
+                &loop->threadId, Loop, loop, TCL_THREAD_STACK_DEFAULT,
+                TCL_THREAD_NOFLAGS);
 
         if (status == TCL_OK)
             fd = control[1];
@@ -95,13 +94,19 @@ static int Start(Tcl_Interp* interp) {
         }
     }
     else
-        PosixError(interp, errno);
+        SshPosixError(interp, errno);
 
     return fd;
 }
 
-static int Send(Tcl_Interp* interp, Message* message) {
-    int result = TCL_ERROR;
+static int Send(
+        Tcl_Interp* interp, unused MessageCallback callback,
+        ClientData clientData) {
+    Message message = {
+        .callback = callback,
+        .clientData = clientData
+    };
+    int result = TCL_OK;
 
     Tcl_MutexLock(&mutex);
 
@@ -109,10 +114,10 @@ static int Send(Tcl_Interp* interp, Message* message) {
         writeFd = Start(interp);
 
     if (writeFd != -1) {
-        if (write(writeFd, message, sizeof(Message)) == sizeof(Message))
+        if (write(writeFd, &message, sizeof(Message)) == sizeof(Message))
             result = TCL_OK;
         else {
-            PosixError(interp, errno);
+            SshPosixError(interp, errno);
 
             if (errno != EAGAIN) {
                 close(writeFd);
@@ -123,61 +128,43 @@ static int Send(Tcl_Interp* interp, Message* message) {
 
     Tcl_MutexUnlock(&mutex);
 
+    if (result != TCL_OK)
+        ckfree(clientData);
+
     return result;
 }
 
 static void AddFdEventHandler(EventLoop* loop, ClientData clientData) {
     FdEventHandler* handler = clientData;
 
-    ssh_event_add_fd(loop->event, handler->fd, handler->events,
-                     handler->callback, handler->clientData);
-
-    ckfree(handler);
+    ssh_event_add_fd(
+            loop->event, handler->fd, handler->events, handler->callback,
+            handler->clientData);
 }
 
-int SshAddFdEventHandler(Tcl_Interp* interp, socket_t fd, short events,
-                         ssh_event_callback callback, ClientData clientData) {
+int SshAddFdEventHandler(
+        Tcl_Interp* interp, socket_t fd, short events,
+        ssh_event_callback callback, ClientData clientData) {
     FdEventHandler* handler = ckalloc(sizeof(FdEventHandler));
-    Message message = {
-        .callback   = AddFdEventHandler,
-        .clientData = handler
-    };
-    int result = TCL_ERROR;
 
     handler->callback   = callback;
     handler->clientData = clientData;
     handler->events     = events;
     handler->fd         = fd;
 
-    result = Send(interp, &message);
-
-    if (result != TCL_OK)
-        ckfree(handler);
-
-    return result;
+    return Send(interp, AddFdEventHandler, handler);
 }
 
 static void RemoveFdEventHandler(EventLoop* loop, ClientData clientData) {
     socket_t* fdPtr = clientData;
 
     ssh_event_remove_fd(loop->event, *fdPtr);
-
-    ckfree(fdPtr);
 }
 
 int SshRemoveFdEventHandler(Tcl_Interp* interp, socket_t fd) {
     socket_t* fdPtr = ckalloc(sizeof(socket_t));
-    Message message = {
-        .callback   = RemoveFdEventHandler,
-        .clientData = fdPtr
-    };
-    int result = TCL_ERROR;
 
     *fdPtr = fd;
-    result = Send(interp, &message);
 
-    if (result != TCL_OK)
-        ckfree(fdPtr);
-
-    return TCL_OK;
+    return Send(interp, RemoveFdEventHandler, fdPtr);
 }

@@ -1,7 +1,4 @@
-#include "config.h"
-#include "oo.h"
-
-#include <stdbool.h>
+#include "sshInt.h"
 
 static Tcl_Object GetObjectFromName(Tcl_Interp* interp, const char* name) {
     Tcl_Obj* nameObj = Tcl_NewStringObj(name, -1);
@@ -45,14 +42,18 @@ Tcl_Class SshNewClass(Tcl_Interp* interp, const char* name,
     if (classObject != NULL) {
         result = Tcl_GetObjectAsClass(classObject);
         if (result != NULL) {
-            Tcl_ClassSetConstructor(interp, result,
-                                    Tcl_NewMethod(interp, result, NULL, true,
-                                                  constructor, NULL));
+            if (constructor != NULL) {
+                Tcl_Method method = Tcl_NewMethod(
+                        interp, result, NULL, true, constructor, NULL);
+
+                Tcl_ClassSetConstructor(interp, result, method);
+            }
 
             if (destructor != NULL) {
-                Tcl_ClassSetDestructor(interp, result,
-                                       Tcl_NewMethod(interp, result, NULL, true,
-                                                     destructor, NULL));
+                Tcl_Method method = Tcl_NewMethod(
+                        interp, result, NULL, true, destructor, NULL);
+
+                Tcl_ClassSetDestructor(interp, result, method);
             }
 
             if (methods != NULL) {
