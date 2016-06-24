@@ -8,10 +8,18 @@ static int CloneBindMetadata(
     return TCL_ERROR;
 }
 
-static int CloneConnectMetadata(
+static int CloneCallbackMetadata(
         unused Tcl_Interp* interp, ClientData srcMetadata,
         ClientData* dstMetadataPtr) {
     Tcl_IncrRefCount((Tcl_Obj*) srcMetadata);
+    *dstMetadataPtr = srcMetadata;
+
+    return TCL_OK;
+}
+
+static int CloneChannelMetadata(unused Tcl_Interp* interp,
+        ClientData srcMetadata, ClientData* dstMetadataPtr) {
+    Tcl_RegisterChannel(NULL, srcMetadata);
     *dstMetadataPtr = srcMetadata;
 
     return TCL_OK;
@@ -24,6 +32,17 @@ static int CloneInterpMetadata(unused Tcl_Interp* interp,
     return TCL_OK;
 }
 
+static int ClonePortMetadata(unused Tcl_Interp* interp, ClientData srcMetadata,
+        ClientData* dstMetadataPtr) {
+    int* srcPort = srcMetadata;
+    int** dstPort = (int**) dstMetadataPtr;
+
+    *dstPort = ckalloc(sizeof(int));
+    **dstPort = *srcPort;
+
+    return TCL_OK;
+}
+
 static int CloneSessionMetadata(
         Tcl_Interp* interp, unused ClientData srcMetadata,
         unused ClientData* dstMetadataPtr) {
@@ -32,30 +51,28 @@ static int CloneSessionMetadata(
     return TCL_ERROR;
 }
 
-static int CloneThreadIdMetadata(
-        unused Tcl_Interp* interp, ClientData srcMetadata,
-        ClientData* dstMetadataPtr) {
-    *dstMetadataPtr = srcMetadata;
-
-    return TCL_OK;
-}
-
 static void DeleteBindMetadata(ClientData metadata) {
-    ssh_bind_free((ssh_bind) metadata);
+    ssh_bind_free(metadata);
 }
 
-static void DeleteConnectMetadata(ClientData metadata) {
-    Tcl_DecrRefCount((Tcl_Obj*) metadata);
+static void DeleteCallbackMetadata(ClientData metadata) {
+    Tcl_DecrRefCount(metadata);
+}
+
+static void DeleteChannelMetadata(ClientData metadata) {
+    Tcl_ClearChannelHandlers(metadata);
+    Tcl_UnregisterChannel(NULL, metadata);
 }
 
 static void DeleteInterpMetadata(unused ClientData metadata) {
 }
 
-static void DeleteSessionMetadata(ClientData metadata) {
-    ssh_free((ssh_session) metadata);
+static void DeletePortMetadata(ClientData metadata) {
+    ckfree(metadata);
 }
 
-static void DeleteThreadIdMetadata(unused ClientData metadata) {
+static void DeleteSessionMetadata(ClientData metadata) {
+    ssh_free(metadata);
 }
 
 static const Tcl_ObjectMetadataType BindMetadata = {
@@ -65,17 +82,38 @@ static const Tcl_ObjectMetadataType BindMetadata = {
     .version    = TCL_OO_METADATA_VERSION_CURRENT
 };
 
-static const Tcl_ObjectMetadataType ConnectMetadata = {
-    .cloneProc  = CloneConnectMetadata,
-    .deleteProc = DeleteConnectMetadata,
-    .name       = "connect",
+static const Tcl_ObjectMetadataType ChannelMetadata = {
+    .cloneProc  = CloneChannelMetadata,
+    .deleteProc = DeleteChannelMetadata,
+    .name       = "channel",
+    .version    = TCL_OO_METADATA_VERSION_CURRENT
+};
+
+static const Tcl_ObjectMetadataType IncomingConnectionCallbackMetadata = {
+    .cloneProc  = CloneCallbackMetadata,
+    .deleteProc = DeleteCallbackMetadata,
+    .name       = "incomingConnectionCallback",
     .version    = TCL_OO_METADATA_VERSION_CURRENT
 };
 
 static const Tcl_ObjectMetadataType InterpMetadata = {
-    .cloneProc = CloneInterpMetadata,
+    .cloneProc  = CloneInterpMetadata,
     .deleteProc = DeleteInterpMetadata,
     .name       = "interp",
+    .version    = TCL_OO_METADATA_VERSION_CURRENT
+};
+
+static const Tcl_ObjectMetadataType NoneAuthCallbackMetadata = {
+    .cloneProc  = CloneCallbackMetadata,
+    .deleteProc = DeleteCallbackMetadata,
+    .name       = "noneAuthCallback",
+    .version    = TCL_OO_METADATA_VERSION_CURRENT
+};
+
+static const Tcl_ObjectMetadataType PortMetadata = {
+    .cloneProc  = ClonePortMetadata,
+    .deleteProc = DeletePortMetadata,
+    .name       = "port",
     .version    = TCL_OO_METADATA_VERSION_CURRENT
 };
 
@@ -86,10 +124,10 @@ static const Tcl_ObjectMetadataType SessionMetadata = {
     .version    = TCL_OO_METADATA_VERSION_CURRENT
 };
 
-static const Tcl_ObjectMetadataType ThreadIdMetadata = {
-    .cloneProc  = CloneThreadIdMetadata,
-    .deleteProc = DeleteThreadIdMetadata,
-    .name       = "threadId",
+static const Tcl_ObjectMetadataType StatusClosedErrorCallbackMetadata = {
+    .cloneProc  = CloneCallbackMetadata,
+    .deleteProc = DeleteCallbackMetadata,
+    .name       = "statusClosedErrorCallback",
     .version    = TCL_OO_METADATA_VERSION_CURRENT
 };
 
@@ -111,42 +149,86 @@ static ClientData Get(
 }
 
 ssh_bind SshGetBind(Tcl_Interp* interp, Tcl_Object object) {
-    return (ssh_bind) Get(interp, object, &BindMetadata);
+    return Get(interp, object, &BindMetadata);
 }
 
-Tcl_Obj* SshGetConnect(Tcl_Interp* interp, Tcl_Object object) {
-    return (Tcl_Obj*) Get(interp, object, &ConnectMetadata);
+Tcl_Channel SshGetChannel(Tcl_Interp* interp, Tcl_Object object) {
+    return Get(interp, object, &ChannelMetadata);
+}
+
+Tcl_Obj* SshGetIncomingConnectionCallback(
+        Tcl_Interp* interp, Tcl_Object object) {
+    return Get(interp, object, &IncomingConnectionCallbackMetadata);
 }
 
 Tcl_Interp* SshGetInterp(Tcl_Interp* interp, Tcl_Object object) {
-    return (Tcl_Interp*) Get(interp, object, &InterpMetadata);
+    return Get(interp, object, &InterpMetadata);
+}
+
+Tcl_Obj* SshGetNoneAuthCallback(Tcl_Interp* interp, Tcl_Object object) {
+    return Get(interp, object, &NoneAuthCallbackMetadata);
+}
+
+int SshGetPort(unused Tcl_Interp* interp, Tcl_Object object) {
+    int* port = Tcl_ObjectGetMetadata(object, &PortMetadata);
+    int result = 22;
+
+    if (port != NULL)
+        result = *port;
+
+    return result;
 }
 
 ssh_session SshGetSession(Tcl_Interp* interp, Tcl_Object object) {
-    return (ssh_session) Get(interp, object, &SessionMetadata);
+    return Get(interp, object, &SessionMetadata);
 }
 
-Tcl_ThreadId SshGetThreadId(Tcl_Interp* interp, Tcl_Object object) {
-    return (Tcl_ThreadId) Get(interp, object, &ThreadIdMetadata);
+Tcl_Obj* SshGetStatusClosedErrorCallback(
+        Tcl_Interp* interp, Tcl_Object object) {
+    return Get(interp, object, &StatusClosedErrorCallbackMetadata);
 }
 
 void SshSetBind(Tcl_Object object, ssh_bind bind) {
-    Tcl_ObjectSetMetadata(object, &BindMetadata, (ClientData) bind);
+    Tcl_ObjectSetMetadata(object, &BindMetadata, bind);
 }
 
-void SshSetConnect(Tcl_Object object, Tcl_Obj* connect) {
-    Tcl_IncrRefCount(connect);
-    Tcl_ObjectSetMetadata(object, &ConnectMetadata, (ClientData) connect);
+void SshSetChannel(Tcl_Object object, Tcl_Channel channel) {
+    Tcl_RegisterChannel(NULL, channel);
+    Tcl_ObjectSetMetadata(object, &ChannelMetadata, channel);
+}
+
+void SshSetIncomingConnectionCallback(
+        Tcl_Object object, Tcl_Obj* incomingConnectionCallback) {
+    Tcl_IncrRefCount(incomingConnectionCallback);
+    Tcl_ObjectSetMetadata(
+            object, &IncomingConnectionCallbackMetadata,
+            incomingConnectionCallback);
 }
 
 void SshSetInterp(Tcl_Object object, Tcl_Interp* interp) {
-    Tcl_ObjectSetMetadata(object, &InterpMetadata, (ClientData) interp);
+    Tcl_ObjectSetMetadata(object, &InterpMetadata, interp);
+}
+
+void SshSetNoneAuthCallback(Tcl_Object object, Tcl_Obj* noneAuthCallback) {
+    Tcl_IncrRefCount(noneAuthCallback);
+    Tcl_ObjectSetMetadata(object, &NoneAuthCallbackMetadata, noneAuthCallback);
+}
+
+void SshSetPort(Tcl_Object object, int port) {
+    int* portPtr = ckalloc(sizeof(int));
+
+    *portPtr = port;
+    Tcl_ObjectSetMetadata(object, &PortMetadata, portPtr);
 }
 
 void SshSetSession(Tcl_Object object, ssh_session session) {
-    Tcl_ObjectSetMetadata(object, &SessionMetadata, (ClientData) session);
+    Tcl_ObjectSetMetadata(object, &SessionMetadata, session);
 }
 
-void SshSetThreadId(Tcl_Object object, Tcl_ThreadId threadId) {
-    Tcl_ObjectSetMetadata(object, &ThreadIdMetadata, (ClientData) threadId);
+void SshSetStatusClosedErrorCallback(
+        Tcl_Object object, Tcl_Obj* statusClosedErrorCallback) {
+    Tcl_IncrRefCount(statusClosedErrorCallback);
+    Tcl_ObjectSetMetadata(
+            object, &StatusClosedErrorCallbackMetadata,
+            statusClosedErrorCallback);
 }

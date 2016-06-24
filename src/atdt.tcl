@@ -1,17 +1,31 @@
 package require ssh
 
-proc Connect {bind session} {
-    puts "Connect $bind $session"
-    $session handleKeyExchange
-    $session configure -blocking false
+proc IncomingConnection {bind session} {
+    puts "IncomingConnection $bind $session"
+
+    $session setCallback auth none [list AuthNone $session]
+    $session setCallback status closedError [list ClosedError $session]
+
+    puts "queueing kex"
+    after idle [list $session handleKeyExchange]
+}
+
+proc AuthNone {session} {
+    puts "auth none $session"
+}
+
+proc ClosedError {session} {
+    puts "status closedError $session"
     $session destroy
 }
 
 set bind [ssh::bind new -port 2222 -rsakey tmp/id_rsa]
-$bind configure -connect [list Connect $bind]
+$bind setCallback incomingConnection [list IncomingConnection $bind]
 $bind listen
 
-after 3000 {set done true}
+puts "Listening"
+after 10000 {set done true}
+puts "Done"
 vwait done
 
 $bind destroy

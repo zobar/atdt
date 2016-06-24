@@ -21,8 +21,36 @@ static Tcl_Class GetClassFromName(Tcl_Interp* interp, const char* name) {
     return result;
 }
 
-Tcl_Object SshNewInstance(Tcl_Interp* interp, const char* className,
-                       const char* name) {
+int SshCallBack(Tcl_Interp* interp, int objc, Tcl_Obj* objv[]) {
+    Tcl_Obj* command = Tcl_ConcatObj(objc, objv);
+    int result = TCL_OK;
+
+    Tcl_IncrRefCount(command);
+
+    result = Tcl_EvalObjEx(interp, command, TCL_EVAL_DIRECT | TCL_EVAL_GLOBAL);
+    if (result != TCL_OK)
+        Tcl_BackgroundException(interp, result);
+
+    Tcl_DecrRefCount(command);
+
+    return result;
+}
+
+void SshDestroyInstance(Tcl_Interp* interp, Tcl_Object object) {
+    Tcl_Obj* name = Tcl_GetObjectName(interp, object);
+
+    if (name != NULL) {
+        Tcl_Obj* destroy = Tcl_NewStringObj("destroy", -1);
+        Tcl_Obj* words[2] = {name, destroy};
+
+        Tcl_IncrRefCount(destroy);
+        Tcl_EvalObjv(interp, 2, words, TCL_EVAL_DIRECT | TCL_EVAL_GLOBAL);
+        Tcl_DecrRefCount(destroy);
+    }
+}
+
+Tcl_Object SshNewInstance(
+        Tcl_Interp* interp, const char* className, const char* name) {
     Tcl_Class class = GetClassFromName(interp, className);
     Tcl_Object result = NULL;
 
