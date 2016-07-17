@@ -3,7 +3,7 @@
 int SshLibError(Tcl_Interp* interp, void* self, int status) {
     int result = TCL_OK;
 
-    if (status != TCL_OK) {
+    if (status != SSH_OK) {
         Tcl_SetObjResult(interp, Tcl_NewStringObj(ssh_get_error(self), -1));
         result = TCL_ERROR;
     }

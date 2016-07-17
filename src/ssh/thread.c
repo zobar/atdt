@@ -39,7 +39,7 @@ static unsigned long ThreadId() {
     return (unsigned long) Tcl_GetCurrentThread();
 }
 
-bool SshThreadInit(unused Tcl_Interp* interp) {
+bool SshInitThread(unused Tcl_Interp* interp) {
     static bool init = true;
     static struct ssh_threads_callbacks_struct callbacks = {
         .mutex_destroy = MutexDestroy,

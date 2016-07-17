@@ -182,7 +182,7 @@ static int SetCallback(
     return result;
 }
 
-bool SshBindInit(Tcl_Interp* interp) {
+bool SshInitBind(Tcl_Interp* interp) {
     static const Tcl_MethodType configure = {
         .callProc = Configure,
         .name     = "configure",

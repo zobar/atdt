@@ -10,8 +10,9 @@ proc IncomingConnection {bind session} {
     after idle [list $session handleKeyExchange]
 }
 
-proc AuthNone {session} {
-    puts "auth none $session"
+proc AuthNone {session message} {
+    puts "auth none $session $message, user is [$message user]"
+    $message accept
 }
 
 proc ClosedError {session} {

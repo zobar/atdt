@@ -15,6 +15,7 @@ src_ssh_ssh_la_CPPFLAGS = $(AM_CPPFLAGS) $(TCL_INCLUDES)
 src_ssh_ssh_la_LDFLAGS  = -module $(TCL_STUB_LIB_SPEC) -lssh $(LDADD)
 src_ssh_ssh_la_SOURCES  = src/ssh/bind.c     \
                           src/ssh/error.c    \
+                          src/ssh/message.c  \
                           src/ssh/metadata.c \
                           src/ssh/oo.c       \
                           src/ssh/session.c  \

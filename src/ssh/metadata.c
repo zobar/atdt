@@ -1,16 +1,14 @@
 #include "sshInt.h"
 
-static int CloneBindMetadata(
-        Tcl_Interp* interp, unused ClientData srcMetadata,
+static int CloneBindMetadata(Tcl_Interp* interp, unused ClientData srcMetadata,
         unused ClientData* dstMetadataPtr) {
     Tcl_SetObjResult(interp, Tcl_NewStringObj("bind is not clonable", -1));
 
     return TCL_ERROR;
 }
 
-static int CloneCallbackMetadata(
-        unused Tcl_Interp* interp, ClientData srcMetadata,
-        ClientData* dstMetadataPtr) {
+static int CloneCallbackMetadata(unused Tcl_Interp* interp,
+        ClientData srcMetadata, ClientData* dstMetadataPtr) {
     Tcl_IncrRefCount((Tcl_Obj*) srcMetadata);
     *dstMetadataPtr = srcMetadata;
 
@@ -32,6 +30,13 @@ static int CloneInterpMetadata(unused Tcl_Interp* interp,
     return TCL_OK;
 }
 
+static int CloneMessageMetadata(Tcl_Interp* interp,
+        unused ClientData srcMetadata, unused ClientData* dstMetadataPtr) {
+    Tcl_SetObjResult(interp, Tcl_NewStringObj("message is not clonable", -1));
+
+    return TCL_ERROR;
+}
+
 static int ClonePortMetadata(unused Tcl_Interp* interp, ClientData srcMetadata,
         ClientData* dstMetadataPtr) {
     int* srcPort = srcMetadata;
@@ -43,12 +48,19 @@ static int ClonePortMetadata(unused Tcl_Interp* interp, ClientData srcMetadata,
     return TCL_OK;
 }
 
-static int CloneSessionMetadata(
-        Tcl_Interp* interp, unused ClientData srcMetadata,
-        unused ClientData* dstMetadataPtr) {
+static int CloneSessionMetadata(Tcl_Interp* interp,
+        unused ClientData srcMetadata, unused ClientData* dstMetadataPtr) {
     Tcl_SetObjResult(interp, Tcl_NewStringObj("session is not clonable", -1));
 
     return TCL_ERROR;
+}
+
+static int CloneSessionRefMetadata(
+        unused Tcl_Interp* interp, ClientData srcMetadata,
+        ClientData* dstMetadataPtr) {
+    *dstMetadataPtr = srcMetadata;
+
+    return TCL_OK;
 }
 
 static void DeleteBindMetadata(ClientData metadata) {
@@ -67,12 +79,19 @@ static void DeleteChannelMetadata(ClientData metadata) {
 static void DeleteInterpMetadata(unused ClientData metadata) {
 }
 
+static void DeleteMessageMetadata(ClientData metadata) {
+    ssh_message_free(metadata);
+}
+
 static void DeletePortMetadata(ClientData metadata) {
     ckfree(metadata);
 }
 
 static void DeleteSessionMetadata(ClientData metadata) {
     ssh_free(metadata);
+}
+
+static void DeleteSessionRefMetadata(unused ClientData metadata) {
 }
 
 static const Tcl_ObjectMetadataType BindMetadata = {
@@ -103,6 +122,13 @@ static const Tcl_ObjectMetadataType InterpMetadata = {
     .version    = TCL_OO_METADATA_VERSION_CURRENT
 };
 
+static const Tcl_ObjectMetadataType MessageMetadata = {
+    .cloneProc  = CloneMessageMetadata,
+    .deleteProc = DeleteMessageMetadata,
+    .name       = "message",
+    .version    = TCL_OO_METADATA_VERSION_CURRENT
+};
+
 static const Tcl_ObjectMetadataType NoneAuthCallbackMetadata = {
     .cloneProc  = CloneCallbackMetadata,
     .deleteProc = DeleteCallbackMetadata,
@@ -121,6 +147,13 @@ static const Tcl_ObjectMetadataType SessionMetadata = {
     .cloneProc  = CloneSessionMetadata,
     .deleteProc = DeleteSessionMetadata,
     .name       = "session",
+    .version    = TCL_OO_METADATA_VERSION_CURRENT
+};
+
+static const Tcl_ObjectMetadataType SessionRefMetadata = {
+    .cloneProc  = CloneSessionRefMetadata,
+    .deleteProc = DeleteSessionRefMetadata,
+    .name       = "sessionRef",
     .version    = TCL_OO_METADATA_VERSION_CURRENT
 };
 
@@ -165,6 +198,10 @@ Tcl_Interp* SshGetInterp(Tcl_Interp* interp, Tcl_Object object) {
     return Get(interp, object, &InterpMetadata);
 }
 
+ssh_message SshGetMessage(Tcl_Interp* interp, Tcl_Object object) {
+    return Get(interp, object, &MessageMetadata);
+}
+
 Tcl_Obj* SshGetNoneAuthCallback(Tcl_Interp* interp, Tcl_Object object) {
     return Get(interp, object, &NoneAuthCallbackMetadata);
 }
@@ -181,6 +218,10 @@ int SshGetPort(unused Tcl_Interp* interp, Tcl_Object object) {
 
 ssh_session SshGetSession(Tcl_Interp* interp, Tcl_Object object) {
     return Get(interp, object, &SessionMetadata);
+}
+
+ssh_session SshGetSessionRef(Tcl_Interp* interp, Tcl_Object object) {
+    return Get(interp, object, &SessionRefMetadata);
 }
 
 Tcl_Obj* SshGetStatusClosedErrorCallback(
@@ -209,6 +250,10 @@ void SshSetInterp(Tcl_Object object, Tcl_Interp* interp) {
     Tcl_ObjectSetMetadata(object, &InterpMetadata, interp);
 }
 
+void SshSetMessage(Tcl_Object object, ssh_message message) {
+    Tcl_ObjectSetMetadata(object, &MessageMetadata, message);
+}
+
 void SshSetNoneAuthCallback(Tcl_Object object, Tcl_Obj* noneAuthCallback) {
     Tcl_IncrRefCount(noneAuthCallback);
     Tcl_ObjectSetMetadata(object, &NoneAuthCallbackMetadata, noneAuthCallback);
@@ -223,6 +268,10 @@ void SshSetPort(Tcl_Object object, int port) {
 
 void SshSetSession(Tcl_Object object, ssh_session session) {
     Tcl_ObjectSetMetadata(object, &SessionMetadata, session);
+}
+
+void SshSetSessionRef(Tcl_Object object, ssh_session sessionRef) {
+    Tcl_ObjectSetMetadata(object, &SessionRefMetadata, sessionRef);
 }
 
 void SshSetStatusClosedErrorCallback(

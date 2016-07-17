@@ -5,9 +5,10 @@ int Ssh_Init(Tcl_Interp* interp) {
 
     if (Tcl_InitStubs(interp, TCL_VERSION, false)
             && Tcl_OOInitStubs(interp)
-            && SshThreadInit(interp)
-            && SshBindInit(interp)
-            && SshSessionInit(interp))
+            && SshInitThread(interp)
+            && SshInitBind(interp)
+            && SshInitSession(interp)
+            && SshInitMessage(interp))
         result = Tcl_PkgProvide(interp, "ssh", PACKAGE_VERSION);
 
     return result;

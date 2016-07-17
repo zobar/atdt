@@ -1,60 +1,11 @@
 #include "sshInt.h"
 
-static int Configure(
-        unused ClientData clientData, Tcl_Interp* interp,
-        Tcl_ObjectContext objectContext, int objc, Tcl_Obj* const* objv) {
-    enum options {BLOCKING};
-    static const char* keys[] = {"-blocking", NULL};
-
-    int i = 0;
-    int result = TCL_OK;
-    ssh_session session = SshGetSession(
-            interp, Tcl_ObjectContextObject(objectContext));
-    int skip = Tcl_ObjectContextSkippedArgs(objectContext);
-
-    for (i = skip; i < objc && result == TCL_OK; ++i) {
-        int option = 0;
-
-        result = Tcl_GetIndexFromObj(
-                interp, objv[i], keys, "option", 0, &option);
-        if (result == TCL_OK) {
-            if (++i < objc) {
-                Tcl_Obj* arg = objv[i];
-
-                switch (option) {
-                case BLOCKING:
-                    {
-                        int blocking = -1;
-                        result = Tcl_GetBooleanFromObj(interp, arg, &blocking);
-                        if (result != TCL_ERROR)
-                            ssh_set_blocking(session, blocking);
-                    }
-                    break;
-
-                 default:
-                    result = TCL_ERROR;
-                }
-            }
-            else {
-                Tcl_Obj* message = Tcl_ObjPrintf(
-                        "\"%s\" option requires an additional argument",
-                        keys[option]);
-
-                Tcl_SetObjResult(interp, message);
-                result = TCL_ERROR;
-            }
-        }
-    }
-
-    return result;
-}
-
-static int Constructor(
-        ClientData clientData, Tcl_Interp* interp,
-        Tcl_ObjectContext objectContext, int objc, Tcl_Obj* const* objv) {
+static int Constructor(unused ClientData clientData, unused Tcl_Interp* interp,
+        Tcl_ObjectContext objectContext, unused int objc,
+        unused Tcl_Obj* const* objv) {
     SshSetSession(Tcl_ObjectContextObject(objectContext), ssh_new());
 
-    return Configure(clientData, interp, objectContext, objc, objv);
+    return TCL_OK;
 }
 
 static void GetMessage(ClientData clientData, unused int mask) {
@@ -69,7 +20,7 @@ static void GetMessage(ClientData clientData, unused int mask) {
         Tcl_Preserve(interp);
 
         while (message != NULL) {
-            Tcl_Obj* command[] = {NULL};
+            Tcl_Obj* command[] = {NULL, NULL};
             int type = ssh_message_type(message);
             int subtype = ssh_message_subtype(message);
 
@@ -87,11 +38,20 @@ static void GetMessage(ClientData clientData, unused int mask) {
                 break;
             }
 
-            if (command[0] != NULL)
-                SshCallBack(interp, 1, command);
+            if (command[0] == NULL) {
+                printf("No callback (%i/%i), rejecting\n", type, subtype);
+                ssh_message_reply_default(message);
+                ssh_message_free(message);
+            }
+            else {
+                Tcl_Object messageObject = SshNewMessage(interp);
 
-            ssh_message_reply_default(message);
-            ssh_message_free(message);
+                printf("Found callback (%i/%i)\n", type, subtype);
+                SshSetMessage(messageObject, message);
+                SshSetSessionRef(messageObject, session);
+                command[1] = Tcl_GetObjectName(interp, messageObject);
+                SshCallBack(interp, 2, command);
+            }
 
             message = ssh_message_get(session);
         }
@@ -209,16 +169,15 @@ static int SetCallback(
     return result;
 }
 
-bool SshSessionInit(Tcl_Interp* interp) {
+void SshDestroySession(Tcl_Interp* interp, Tcl_Object object) {
+    SshDestroyInstance(interp, object);
+}
+
+bool SshInitSession(Tcl_Interp* interp) {
     static const Tcl_MethodType constructor = {
         .version  = TCL_OO_METHOD_VERSION_CURRENT,
         .name     = "Constructor",
         .callProc = Constructor
-    };
-    static const Tcl_MethodType configure = {
-        .version  = TCL_OO_METHOD_VERSION_CURRENT,
-        .name     = "configure",
-        .callProc = Configure
     };
     static const Tcl_MethodType handleKeyExchange = {
         .version  = TCL_OO_METHOD_VERSION_CURRENT,
@@ -231,15 +190,11 @@ bool SshSessionInit(Tcl_Interp* interp) {
         .version  = TCL_OO_METHOD_VERSION_CURRENT
     };
     static const Tcl_MethodType* methods[] =
-            {&configure, &handleKeyExchange, &setCallback, NULL};
+            {&handleKeyExchange, &setCallback, NULL};
     Tcl_Class class = SshNewClass(
             interp, "::ssh::session", &constructor, NULL, methods);
 
     return (class != NULL);
-}
-
-void SshDestroySession(Tcl_Interp* interp, Tcl_Object object) {
-    SshDestroyInstance(interp, object);
 }
 
 Tcl_Object SshNewSession(Tcl_Interp* interp) {
