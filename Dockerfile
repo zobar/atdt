@@ -2,15 +2,15 @@ FROM debian:latest
 RUN apt-get update && apt-get install --assume-yes --no-install-recommends ca-certificates curl
 RUN apt-get install --assume-yes --no-install-recommends g++ libarchive-dev libcurl4-openssl-dev libexpat1-dev libjsoncpp-dev liblzma-dev make zlib1g-dev &&\
  mkdir -p /usr/src/cmake &&\
- curl --location --output - https://cmake.org/files/v3.5/cmake-3.5.2.tar.gz | tar --directory=/usr/src/cmake --extract --file=- --gzip --strip-components=1 &&\
+ curl --location --output - https://cmake.org/files/v3.6/cmake-3.6.1.tar.gz | tar --directory=/usr/src/cmake --extract --file=- --gzip --strip-components=1 &&\
  mkdir -p /tmp/build/cmake &&\
  cd /tmp/build/cmake &&\
  /usr/src/cmake/bootstrap --prefix=/usr --system-libs &&\
  make &&\
  make install
-RUN apt-get install --assume-yes --no-install-recommends libssl-dev xz-utils &&\
+RUN apt-get install --assume-yes --no-install-recommends libssl-dev &&\
  mkdir -p /usr/src/libssh &&\
- curl --location --output - https://red.libssh.org/attachments/download/195/libssh-0.7.3.tar.xz | tar --directory=/usr/src/libssh --extract --file=- --strip-components=1 --xz &&\
+ curl --location --output - https://git.libssh.org/projects/libssh.git/snapshot/libssh-0.7.3.tar.gz | tar --directory=/usr/src/libssh --extract --file=- --gzip --strip-components=1 &&\
  mkdir -p /tmp/build/libssh &&\
  cd /tmp/build/libssh &&\
  cmake -D CMAKE_BUILD_TYPE=Debug -D CMAKE_INSTALL_PREFIX=/usr -D LIB_INSTALL_DIR=/usr/lib/x86_64-linux-gnu /usr/src/libssh &&\

@@ -8,6 +8,24 @@ static int Constructor(unused ClientData clientData, unused Tcl_Interp* interp,
     return TCL_OK;
 }
 
+static void GetStatus(Tcl_Interp* interp, Tcl_Object object) {
+    ssh_session session = SshGetSession(NULL, object);
+    int status = ssh_get_status(session);
+
+    if (status != 0) {
+        Tcl_Obj* command[] = {NULL};
+
+        if ((status & SSH_CLOSED_ERROR) != 0) {
+            command[0] = SshGetStatusClosedErrorCallback(NULL, object);
+            if (command[0] != NULL)
+                SshCallBack(interp, 1, command);
+        }
+
+        if ((status & (SSH_CLOSED | SSH_CLOSED_ERROR)) != 0)
+            SshDestroySession(interp, object);
+    }
+}
+
 static void GetMessage(ClientData clientData, unused int mask) {
     Tcl_Object object = clientData;
     Tcl_Interp* interp = SshGetInterp(NULL, object);
@@ -15,7 +33,6 @@ static void GetMessage(ClientData clientData, unused int mask) {
 
     if (interp != NULL && session != NULL) {
         ssh_message message = ssh_message_get(session);
-        int status = 0;
 
         Tcl_Preserve(interp);
 
@@ -39,16 +56,15 @@ static void GetMessage(ClientData clientData, unused int mask) {
             }
 
             if (command[0] == NULL) {
-                printf("No callback (%i/%i), rejecting\n", type, subtype);
                 ssh_message_reply_default(message);
                 ssh_message_free(message);
             }
             else {
                 Tcl_Object messageObject = SshNewMessage(interp);
+                Tcl_Obj* sessionName = Tcl_GetObjectName(interp, object);
 
-                printf("Found callback (%i/%i)\n", type, subtype);
                 SshSetMessage(messageObject, message);
-                SshSetSessionRef(messageObject, session);
+                SshSetSessionName(messageObject, sessionName);
                 command[1] = Tcl_GetObjectName(interp, messageObject);
                 SshCallBack(interp, 2, command);
             }
@@ -56,17 +72,37 @@ static void GetMessage(ClientData clientData, unused int mask) {
             message = ssh_message_get(session);
         }
 
-        status = ssh_get_status(session);
-        if (status != 0) {
-            Tcl_Obj* command[] = {NULL};
-
-            if ((status & SSH_CLOSED_ERROR) != 0) {
-                command[0] = SshGetStatusClosedErrorCallback(NULL, object);
-                SshCallBack(interp, 1, command);
-            }
-        }
-
+        GetStatus(interp, object);
         Tcl_Release(interp);
+    }
+}
+
+static void DoHandleKeyExchange(ClientData clientData, unused int mask) {
+    Tcl_Object object = clientData;
+    Tcl_Channel channel = SshGetChannel(NULL, object);
+
+    if (channel != NULL) {
+        Tcl_Interp* interp = SshGetInterp(NULL, object);
+        ssh_session session = SshGetSession(NULL, object);
+
+        Tcl_DeleteChannelHandler(channel, DoHandleKeyExchange, object);
+
+        if (interp != NULL && session != NULL) {
+            Tcl_Preserve(interp);
+
+            if (ssh_handle_key_exchange(session) == SSH_OK) {
+                ssh_set_blocking(session, false);
+                if (Tcl_SetChannelOption(
+                        NULL, channel, "-blocking", "false") == TCL_OK) {
+                    GetMessage(object, TCL_READABLE);
+                    Tcl_CreateChannelHandler(
+                            channel, TCL_READABLE, GetMessage, object);
+                }
+            }
+
+            GetStatus(interp, object);
+            Tcl_Release(interp);
+        }
     }
 }
 
@@ -79,21 +115,11 @@ static int HandleKeyExchange(
     if (skip == objc) {
         Tcl_Object object = Tcl_ObjectContextObject(objectContext);
         Tcl_Channel channel = SshGetChannel(interp, object);
-        ssh_session session = SshGetSession(interp, object);
 
-        if (channel != NULL && session != NULL) {
-            result = SshLibError(
-                    interp, session, ssh_handle_key_exchange(session));
-            if (result == TCL_OK) {
-                ssh_set_blocking(session, false);
-                result = Tcl_SetChannelOption(
-                        interp, channel, "-blocking", "false");
-                if (result == TCL_OK) {
-                    GetMessage(object, TCL_READABLE);
-                    Tcl_CreateChannelHandler(
-                            channel, TCL_READABLE, GetMessage, object);
-                }
-            }
+        if (channel != NULL) {
+            Tcl_CreateChannelHandler(
+                    channel, TCL_READABLE, DoHandleKeyExchange, object);
+            result = TCL_OK;
         }
     }
     else

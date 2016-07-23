@@ -15,8 +15,6 @@ internal int SshCallBack(Tcl_Interp* interp, int objc, Tcl_Obj* objv[]);
 
 internal void SshDestroyInstance(Tcl_Interp* interp, Tcl_Object object);
 
-internal void SshDestroyMessage(Tcl_Interp* interp, Tcl_Object object);
-
 internal void SshDestroySession(Tcl_Interp* interp, Tcl_Object object);
 
 internal ssh_bind SshGetBind(Tcl_Interp* interp, Tcl_Object object);
@@ -36,7 +34,7 @@ internal int SshGetPort(Tcl_Interp* interp, Tcl_Object object);
 
 internal ssh_session SshGetSession(Tcl_Interp* interp, Tcl_Object object);
 
-internal ssh_session SshGetSessionRef(Tcl_Interp* interp, Tcl_Object object);
+internal Tcl_Obj* SshGetSessionName(Tcl_Interp* interp, Tcl_Object object);
 
 internal Tcl_Obj* SshGetStatusClosedErrorCallback(
 		Tcl_Interp* interp, Tcl_Object object);
@@ -82,7 +80,7 @@ internal void SshSetPort(Tcl_Object object, int port);
 
 internal void SshSetSession(Tcl_Object object, ssh_session session);
 
-internal void SshSetSessionRef(Tcl_Object object, ssh_session session);
+internal void SshSetSessionName(Tcl_Object object, Tcl_Obj* sessionName);
 
 internal void SshSetStatusClosedErrorCallback(
 		Tcl_Object object, Tcl_Obj* incomingConnectionCallback);

@@ -7,14 +7,6 @@ static int CloneBindMetadata(Tcl_Interp* interp, unused ClientData srcMetadata,
     return TCL_ERROR;
 }
 
-static int CloneCallbackMetadata(unused Tcl_Interp* interp,
-        ClientData srcMetadata, ClientData* dstMetadataPtr) {
-    Tcl_IncrRefCount((Tcl_Obj*) srcMetadata);
-    *dstMetadataPtr = srcMetadata;
-
-    return TCL_OK;
-}
-
 static int CloneChannelMetadata(unused Tcl_Interp* interp,
         ClientData srcMetadata, ClientData* dstMetadataPtr) {
     Tcl_RegisterChannel(NULL, srcMetadata);
@@ -55,9 +47,10 @@ static int CloneSessionMetadata(Tcl_Interp* interp,
     return TCL_ERROR;
 }
 
-static int CloneSessionRefMetadata(
+static int CloneTclObjMetadata(
         unused Tcl_Interp* interp, ClientData srcMetadata,
         ClientData* dstMetadataPtr) {
+    Tcl_IncrRefCount((Tcl_Obj*) srcMetadata);
     *dstMetadataPtr = srcMetadata;
 
     return TCL_OK;
@@ -65,10 +58,6 @@ static int CloneSessionRefMetadata(
 
 static void DeleteBindMetadata(ClientData metadata) {
     ssh_bind_free(metadata);
-}
-
-static void DeleteCallbackMetadata(ClientData metadata) {
-    Tcl_DecrRefCount(metadata);
 }
 
 static void DeleteChannelMetadata(ClientData metadata) {
@@ -91,7 +80,8 @@ static void DeleteSessionMetadata(ClientData metadata) {
     ssh_free(metadata);
 }
 
-static void DeleteSessionRefMetadata(unused ClientData metadata) {
+static void DeleteTclObjMetadata(ClientData metadata) {
+    Tcl_DecrRefCount(metadata);
 }
 
 static const Tcl_ObjectMetadataType BindMetadata = {
@@ -109,8 +99,8 @@ static const Tcl_ObjectMetadataType ChannelMetadata = {
 };
 
 static const Tcl_ObjectMetadataType IncomingConnectionCallbackMetadata = {
-    .cloneProc  = CloneCallbackMetadata,
-    .deleteProc = DeleteCallbackMetadata,
+    .cloneProc  = CloneTclObjMetadata,
+    .deleteProc = DeleteTclObjMetadata,
     .name       = "incomingConnectionCallback",
     .version    = TCL_OO_METADATA_VERSION_CURRENT
 };
@@ -130,8 +120,8 @@ static const Tcl_ObjectMetadataType MessageMetadata = {
 };
 
 static const Tcl_ObjectMetadataType NoneAuthCallbackMetadata = {
-    .cloneProc  = CloneCallbackMetadata,
-    .deleteProc = DeleteCallbackMetadata,
+    .cloneProc  = CloneTclObjMetadata,
+    .deleteProc = DeleteTclObjMetadata,
     .name       = "noneAuthCallback",
     .version    = TCL_OO_METADATA_VERSION_CURRENT
 };
@@ -150,16 +140,16 @@ static const Tcl_ObjectMetadataType SessionMetadata = {
     .version    = TCL_OO_METADATA_VERSION_CURRENT
 };
 
-static const Tcl_ObjectMetadataType SessionRefMetadata = {
-    .cloneProc  = CloneSessionRefMetadata,
-    .deleteProc = DeleteSessionRefMetadata,
-    .name       = "sessionRef",
+static const Tcl_ObjectMetadataType SessionNameMetadata = {
+    .cloneProc  = CloneTclObjMetadata,
+    .deleteProc = DeleteTclObjMetadata,
+    .name       = "sessionName",
     .version    = TCL_OO_METADATA_VERSION_CURRENT
 };
 
 static const Tcl_ObjectMetadataType StatusClosedErrorCallbackMetadata = {
-    .cloneProc  = CloneCallbackMetadata,
-    .deleteProc = DeleteCallbackMetadata,
+    .cloneProc  = CloneTclObjMetadata,
+    .deleteProc = DeleteTclObjMetadata,
     .name       = "statusClosedErrorCallback",
     .version    = TCL_OO_METADATA_VERSION_CURRENT
 };
@@ -220,8 +210,8 @@ ssh_session SshGetSession(Tcl_Interp* interp, Tcl_Object object) {
     return Get(interp, object, &SessionMetadata);
 }
 
-ssh_session SshGetSessionRef(Tcl_Interp* interp, Tcl_Object object) {
-    return Get(interp, object, &SessionRefMetadata);
+Tcl_Obj* SshGetSessionName(Tcl_Interp* interp, Tcl_Object object) {
+    return Get(interp, object, &SessionNameMetadata);
 }
 
 Tcl_Obj* SshGetStatusClosedErrorCallback(
@@ -270,8 +260,9 @@ void SshSetSession(Tcl_Object object, ssh_session session) {
     Tcl_ObjectSetMetadata(object, &SessionMetadata, session);
 }
 
-void SshSetSessionRef(Tcl_Object object, ssh_session sessionRef) {
-    Tcl_ObjectSetMetadata(object, &SessionRefMetadata, sessionRef);
+void SshSetSessionName(Tcl_Object object, Tcl_Obj* sessionName) {
+    Tcl_IncrRefCount(sessionName);
+    Tcl_ObjectSetMetadata(object, &SessionNameMetadata, sessionName);
 }
 
 void SshSetStatusClosedErrorCallback(

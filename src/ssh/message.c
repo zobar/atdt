@@ -1,5 +1,33 @@
 #include "sshInt.h"
 
+static ssh_session GetNamedSession(Tcl_Interp* interp, Tcl_Object object) {
+    ssh_session result = NULL;
+    Tcl_Obj* sessionName = SshGetSessionName(interp, object);
+
+    if (sessionName != NULL) {
+        Tcl_Object sessionObject = Tcl_GetObjectFromObj(interp, sessionName);
+
+        if (sessionObject == NULL) {
+            Tcl_Obj* message = Tcl_ObjPrintf(
+                    "'%s' is not a current session",
+                    Tcl_GetString(sessionName));
+
+            Tcl_SetObjResult(interp, message);
+        }
+        else
+            result = SshGetSession(interp, sessionObject);
+    }
+
+    return result;
+}
+
+static void DestroyMessage(Tcl_Interp* interp, Tcl_Object object, int result) {
+    Tcl_InterpState state = Tcl_SaveInterpState(interp, result);
+
+    SshDestroyInstance(interp, object);
+    Tcl_RestoreInterpState(interp, state);
+}
+
 static int Accept(
         unused ClientData clientData, Tcl_Interp* interp,
         Tcl_ObjectContext objectContext, int objc, Tcl_Obj* const* objv) {
@@ -9,13 +37,15 @@ static int Accept(
     if (skip == objc) {
         Tcl_Object object = Tcl_ObjectContextObject(objectContext);
         ssh_message message = SshGetMessage(interp, object);
-        ssh_session session = SshGetSessionRef(interp, object);
+        ssh_session session = GetNamedSession(interp, object);
 
         if (message != NULL) {
-            result = SshLibError(
-                    interp, session,
-                    ssh_message_auth_reply_success(message, false));
-            SshDestroyMessage(interp, object);
+            if (session != NULL) {
+                result = SshLibError(
+                        interp, session,
+                        ssh_message_auth_reply_success(message, false));
+            }
+            DestroyMessage(interp, object, result);
         }
     }
     else
@@ -33,12 +63,14 @@ static int Reject(
     if (skip == objc) {
         Tcl_Object object = Tcl_ObjectContextObject(objectContext);
         ssh_message message = SshGetMessage(interp, object);
-        ssh_session session = SshGetSessionRef(interp, object);
+        ssh_session session = GetNamedSession(interp, object);
 
         if (message != NULL) {
-            result = SshLibError(
-                    interp, session, ssh_message_reply_default(message));
-            SshDestroyMessage(interp, object);
+            if (session != NULL) {
+                result = SshLibError(
+                        interp, session, ssh_message_reply_default(message));
+            }
+            DestroyMessage(interp, object, result);
         }
     }
     else
@@ -68,10 +100,6 @@ static int User(unused ClientData clientData, Tcl_Interp* interp,
         Tcl_WrongNumArgs(interp, skip, objv, NULL);
 
     return result;
-}
-
-void SshDestroyMessage(Tcl_Interp* interp, Tcl_Object object) {
-    SshDestroyInstance(interp, object);
 }
 
 bool SshInitMessage(Tcl_Interp* interp) {
